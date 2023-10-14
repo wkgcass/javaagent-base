@@ -1,0 +1,125 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'signing'
+    id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+}
+
+group 'io.vproxy'
+version '1.0.0'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    group 'io.vproxy'
+    version rootProject.version
+
+    sourceCompatibility = 11.0
+    targetCompatibility = 11.0
+
+    tasks.withType(GenerateModuleMetadata) {
+        enabled = false
+    }
+    task javadocJar(type: Jar) {
+        archiveClassifier = 'javadoc'
+        from "$buildDir/docs/javadoc"
+    }
+    java {
+        withSourcesJar()
+    }
+
+    if (project.name == 'base') {
+        apply plugin: 'maven-publish'
+        apply plugin: 'signing'
+
+        def releaseName = "javaagent-base"
+        def pomName = "javaagent"
+
+        publishing {
+            publications {
+                maven(MavenPublication) {
+                    from components.java
+                    artifactId releaseName
+
+                    artifact(javadocJar)
+
+                    pom {
+                        name = 'io.vproxy.' + pomName
+                        description = releaseName
+                        url = 'https://vproxy.io'
+                        licenses {
+                            license {
+                                name = 'MIT License'
+                                url = 'https://github.com/wkgcass/javaagent-base/blob/master/LICENSE'
+                            }
+                        }
+                        developers {
+                            developer {
+                                id = 'wkgcass'
+                                name = 'K.G. Wang'
+                                email = 'wkgcass@hotmail.com'
+                            }
+                        }
+                        scm {
+                            connection = 'scm:git:git://github.com/wkgcass/javaagent-base.git'
+                            developerConnection = 'scm:git:git://github.com/wkgcass/javaagent-base.git'
+                            url = 'https://github.com/wkgcass/javaagent-base'
+                        }
+                    }
+                }
+            }
+            repositories {
+                maven {
+                    credentials {
+                        username 'wkgcass'
+                        password System.getProperty("MavenPublishPassword")
+                    }
+                    def releasesRepoUrl = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
+                    def snapshotsRepoUrl = 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+                    url = version.contains('-DEV') ? snapshotsRepoUrl : releasesRepoUrl
+                }
+            }
+        }
+        if (!System.getProperty("MavenLocalInstall", "false").equals("true")) {
+            signing {
+                sign publishing.publications.maven
+            }
+        }
+    }
+}
+
+project(':base') {
+    compileJava {
+        options.compilerArgs += '--add-exports=java.base/jdk.internal.org.objectweb.asm=io.vproxy.javaagent'
+        options.compilerArgs += '--add-exports=java.base/jdk.internal.org.objectweb.asm.tree=io.vproxy.javaagent'
+    }
+}
+
+project(':sample') {
+    apply plugin: 'com.github.johnrengelman.shadow'
+
+    jar {
+        manifest {
+            attributes 'Premain-Class': 'io.vproxy.javaagent.sample.Premain'
+            attributes 'Agent-Class': 'io.vproxy.javaagent.sample.Premain'
+        }
+    }
+    shadowJar {
+        archiveBaseName.set('biginteger-agent')
+        archiveClassifier.set('')
+        archiveVersion.set('')
+        exclude 'module-info.class'
+    }
+    compileJava {
+        options.compilerArgs += '--add-exports=java.base/jdk.internal.org.objectweb.asm=io.vproxy.javaagent,io.vproxy.javaagent.sample'
+        options.compilerArgs += '--add-exports=java.base/jdk.internal.org.objectweb.asm.tree=io.vproxy.javaagent,io.vproxy.javaagent.sample'
+    }
+    dependencies {
+        implementation project(':base')
+    }
+}

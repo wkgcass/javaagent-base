@@ -1,0 +1,4 @@
+rootProject.name = 'javaagent-base'
+include 'base'
+include 'sample'
+
